@@ -1,5 +1,5 @@
 ﻿/**
- * Steamless - Copyright (c) 2015 - 2018 atom0s [atom0s@live.com]
+ * Steamless - Copyright (c) 2015 - 2024 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -60,63 +60,6 @@ namespace Steamless.Unpacker.Variant20.x86.Classes
             }
 
             return key;
-        }
-
-        /// <summary>
-        /// The second pass of decryption for the SteamDRMP.dll file.
-        /// 
-        /// @note    The encryption method here is known as XTEA.
-        /// </summary>
-        /// <param name="res">The result value buffer to write our returns to.</param>
-        /// <param name="keys">The keys used for the decryption.</param>
-        /// <param name="v1">The first value to decrypt from.</param>
-        /// <param name="v2">The second value to decrypt from.</param>
-        /// <param name="n">The number of passes to crypt the data with.</param>
-        public static void SteamDrmpDecryptPass2(ref uint[] res, uint[] keys, uint v1, uint v2, uint n = 32)
-        {
-            const uint delta = 0x9E3779B9;
-            const uint mask = 0xFFFFFFFF;
-            var sum = (delta * n) & mask;
-
-            for (var x = 0; x < n; x++)
-            {
-                v2 = (v2 - (((v1 << 4 ^ v1 >> 5) + v1) ^ (sum + keys[sum >> 11 & 3]))) & mask;
-                sum = (sum - delta) & mask;
-                v1 = (v1 - (((v2 << 4 ^ v2 >> 5) + v2) ^ (sum + keys[sum & 3]))) & mask;
-            }
-
-            res[0] = v1;
-            res[1] = v2;
-        }
-
-        /// <summary>
-        /// The first pass of the decryption for the SteamDRMP.dll file.
-        /// 
-        /// @note    The encryption method here is known as XTEA. It is modded to include
-        ///          some basic xor'ing.
-        /// </summary>
-        /// <param name="data">The data to decrypt.</param>
-        /// <param name="size">The size of the data to decrypt.</param>
-        /// <param name="keys">The keys used for the decryption.</param>
-        public static void SteamDrmpDecryptPass1(ref byte[] data, uint size, uint[] keys)
-        {
-            var v1 = (uint)0x55555555;
-            var v2 = (uint)0x55555555;
-
-            for (var x = 0; x < size; x += 8)
-            {
-                var d1 = BitConverter.ToUInt32(data, x + 0);
-                var d2 = BitConverter.ToUInt32(data, x + 4);
-
-                var res = new uint[2];
-                SteamDrmpDecryptPass2(ref res, keys, d1, d2);
-
-                Array.Copy(BitConverter.GetBytes(res[0] ^ v1), 0, data, x + 0, 4);
-                Array.Copy(BitConverter.GetBytes(res[1] ^ v2), 0, data, x + 4, 4);
-
-                v1 = d1;
-                v2 = d2;
-            }
         }
     }
 }

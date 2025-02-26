@@ -1,5 +1,5 @@
 ﻿/**
- * Steamless - Copyright (c) 2015 - 2018 atom0s [atom0s@live.com]
+ * Steamless - Copyright (c) 2015 - 2024 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -27,14 +27,14 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 
 [assembly: AssemblyTitle("Steamless.Unpacker.Variant20.x86")]
-[assembly: AssemblyDescription("Steamless SteamStub Variant v2.0 (x86) Unpacker")]
+[assembly: AssemblyDescription("Steamless SteamStub Variant 2.0 (x86) Unpacker")]
 [assembly: AssemblyConfiguration("Release")]
 [assembly: AssemblyCompany("atom0s")]
 [assembly: AssemblyProduct("Steamless.Unpacker.Variant20.x86")]
-[assembly: AssemblyCopyright("Copyright © atom0s 2015 - 2018")]
+[assembly: AssemblyCopyright("Copyright © atom0s 2015 - 2024")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 [assembly: ComVisible(false)]
-[assembly: Guid("a40154cd-a0fd-4371-8099-ce277e0989af")]
-[assembly: AssemblyVersion("1.0.0.5")]
-[assembly: AssemblyFileVersion("1.0.0.5")]
+[assembly: Guid("4f11f26d-2946-467f-a4e9-9e2a619a1fd3")]
+[assembly: AssemblyVersion("1.0.0.3")]
+[assembly: AssemblyFileVersion("1.0.0.3")]

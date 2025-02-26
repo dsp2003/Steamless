@@ -1,5 +1,5 @@
 ﻿/**
- * Steamless - Copyright (c) 2015 - 2018 atom0s [atom0s@live.com]
+ * Steamless - Copyright (c) 2015 - 2024 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -36,6 +36,10 @@ namespace Steamless.API.Model
             this.KeepBindSection = false;
             this.DumpPayloadToDisk = false;
             this.DumpSteamDrmpToDisk = false;
+            this.UseExperimentalFeatures = false;
+            this.DontRealignSections = true;
+            this.ZeroDosStubData = true;
+            this.RecalculateFileChecksum = false;
         }
 
         /// <summary>
@@ -43,8 +47,8 @@ namespace Steamless.API.Model
         /// </summary>
         public bool VerboseOutput
         {
-            get { return this.Get<bool>("VerboseOutput"); }
-            set { this.Set("VerboseOutput", value); }
+            get => this.Get<bool>("VerboseOutput");
+            set => this.Set("VerboseOutput", value);
         }
 
         /// <summary>
@@ -52,8 +56,8 @@ namespace Steamless.API.Model
         /// </summary>
         public bool KeepBindSection
         {
-            get { return this.Get<bool>("KeepBindSection"); }
-            set { this.Set("KeepBindSection", value); }
+            get => this.Get<bool>("KeepBindSection");
+            set => this.Set("KeepBindSection", value);
         }
 
         /// <summary>
@@ -61,8 +65,8 @@ namespace Steamless.API.Model
         /// </summary>
         public bool DumpPayloadToDisk
         {
-            get { return this.Get<bool>("DumpPayloadToDisk"); }
-            set { this.Set("DumpPayloadToDisk", value); }
+            get => this.Get<bool>("DumpPayloadToDisk");
+            set => this.Set("DumpPayloadToDisk", value);
         }
 
         /// <summary>
@@ -70,8 +74,44 @@ namespace Steamless.API.Model
         /// </summary>
         public bool DumpSteamDrmpToDisk
         {
-            get { return this.Get<bool>("DumpSteamDrmpToDisk"); }
-            set { this.Set("DumpSteamDrmpToDisk", value); }
+            get => this.Get<bool>("DumpSteamDrmpToDisk");
+            set => this.Set("DumpSteamDrmpToDisk", value);
+        }
+
+        /// <summary>
+        /// Gets or sets the use experimental features option value.
+        /// </summary>
+        public bool UseExperimentalFeatures
+        {
+            get => this.Get<bool>("UseExperimentalFeatures");
+            set => this.Set("UseExperimentalFeatures", value);
+        }
+
+        /// <summary>
+        /// Gets or sets the don't realign sections option value.
+        /// </summary>
+        public bool DontRealignSections
+        {
+            get => this.Get<bool>("DontRealignSections");
+            set => this.Set("DontRealignSections", value);
+        }
+
+        /// <summary>
+        /// Gets or sets if the DOS stub data should be zeroed.
+        /// </summary>
+        public bool ZeroDosStubData
+        {
+            get => this.Get<bool>("ZeroDosStubData");
+            set => this.Set("ZeroDosStubData", value);
+        }
+
+        /// <summary>
+        /// Gets or sets if the file checksum should be recalculated.
+        /// </summary>
+        public bool RecalculateFileChecksum
+        {
+            get => this.Get<bool>("RecalculateFileChecksum");
+            set => this.Set("RecalculateFileChecksum", value);
         }
     }
 }

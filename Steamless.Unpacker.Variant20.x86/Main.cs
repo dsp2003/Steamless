@@ -1,5 +1,5 @@
 ﻿/**
- * Steamless - Copyright (c) 2015 - 2018 atom0s [atom0s@live.com]
+ * Steamless - Copyright (c) 2015 - 2024 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -26,7 +26,6 @@
 namespace Steamless.Unpacker.Variant20.x86
 {
     using API;
-    using API.Crypto;
     using API.Events;
     using API.Extensions;
     using API.Model;
@@ -41,7 +40,6 @@ namespace Steamless.Unpacker.Variant20.x86
     using System.Linq;
     using System.Reflection;
     using System.Runtime.InteropServices;
-    using System.Security.Cryptography;
 
     [SteamlessApiVersion(1, 0)]
     public class Main : SteamlessPlugin
@@ -110,8 +108,8 @@ namespace Steamless.Unpacker.Variant20.x86
                 // Obtain the bind section data..
                 var bind = f.GetSectionData(".bind");
 
-                // Attempt to locate the known v2.x signature..
-                return Pe32Helpers.FindPattern(bind, "53 51 52 56 57 55 8B EC 81 EC 00 10 00 00 C7") > 0;
+                // Attempt to locate the known v2.0 signature..
+                return Pe32Helpers.FindPattern(bind, "53 51 52 56 57 55 8B EC 81 EC 00 10 00 00 BE") != -1;
             }
             catch
             {
@@ -149,25 +147,24 @@ namespace Steamless.Unpacker.Variant20.x86
             if (!this.Step1())
                 return false;
 
-            this.Log("Step 2 - Read, decode and process the payload data.", LogMessageType.Information);
+            this.Log("Step 2 - Read, decrypt and process the main code section.", LogMessageType.Information);
             if (!this.Step2())
                 return false;
 
-            this.Log("Step 3 - Read, decode and dump the SteamDRMP.dll file.", LogMessageType.Information);
+            this.Log("Step 3 - Prepare the file sections.", LogMessageType.Information);
             if (!this.Step3())
                 return false;
 
-            this.Log("Step 4 - Scan, dump and pull needed offsets from within the SteamDRMP.dll file.", LogMessageType.Information);
+            this.Log("Step 4 - Rebuild and save the unpacked file.", LogMessageType.Information);
             if (!this.Step4())
                 return false;
 
-            this.Log("Step 5 - Read, decrypt and process the main code section.", LogMessageType.Information);
-            if (!this.Step5())
-                return false;
-
-            this.Log("Step 6 - Rebuild and save the unpacked file.", LogMessageType.Information);
-            if (!this.Step6())
-                return false;
+            if (this.Options.RecalculateFileChecksum)
+            {
+                this.Log("Step 5 - Rebuild unpacked file checksum.", LogMessageType.Information);
+                if (!this.Step5())
+                    return false;
+            }
 
             return true;
         }
@@ -187,26 +184,39 @@ namespace Steamless.Unpacker.Variant20.x86
             if (BitConverter.ToUInt32(this.File.FileData, (int)fileOffset - 4) != 0xC0DEC0DE)
                 return false;
 
-            uint structOffset;
-            uint structSize;
-            uint structXorKey;
-
             // Disassemble the file to locate the needed DRM information..
-            if (!this.DisassembleFile(out structOffset, out structSize, out structXorKey))
+            if (!this.DisassembleFile(out var structOffset, out var structSize, out var structXorKey))
                 return false;
 
             // Obtain the DRM header data..
             var headerData = new byte[structSize];
-            Array.Copy(this.File.FileData, this.File.GetFileOffsetFromRva((uint)structOffset), headerData, 0, structSize);
+            Array.Copy(this.File.FileData, this.File.GetFileOffsetFromRva(structOffset), headerData, 0, structSize);
 
             // Xor decode the header data..
-            this.XorKey = SteamStubHelpers.SteamXor(ref headerData, (uint)headerData.Length, (uint)structXorKey);
+            this.XorKey = SteamStubHelpers.SteamXor(ref headerData, (uint)headerData.Length, 0);
 
-            // Determine how to handle the header based on the size..
-            if ((structSize / 4) == 0xD0)
-                this.StubHeader = Pe32Helpers.GetStructure<SteamStub32Var20Header_D0Variant>(headerData);
-            else
-                this.StubHeader = Pe32Helpers.GetStructure<SteamStub32Var20Header>(headerData);
+            // Create the stub header..
+            switch (structSize)
+            {
+                case 856:
+                    this.StubHeader = Pe32Helpers.GetStructure<SteamStub32Var20_856_Header>(headerData);
+                    break;
+                case 884:
+                    this.StubHeader = Pe32Helpers.GetStructure<SteamStub32Var20_884_Header>(headerData);
+                    break;
+                case 952:
+                    this.StubHeader = Pe32Helpers.GetStructure<SteamStub32Var20_952_Header>(headerData);
+                    break;
+                default:
+                    {
+                        this.Log("", LogMessageType.Error);
+                        this.Log($"Invalid/unknown variant header size: {structSize}", LogMessageType.Error);
+                        this.Log("Please report this issue on Steamless' GitHub issue tracker!", LogMessageType.Error);
+                        this.Log("Be sure to include a copy of this games .exe file you are trying to unpack!", LogMessageType.Error);
+                        this.Log("", LogMessageType.Error);
+                        return false;
+                    }
+            }
 
             return true;
         }
@@ -214,32 +224,64 @@ namespace Steamless.Unpacker.Variant20.x86
         /// <summary>
         /// Step #2
         /// 
-        /// Read, decode and process the payload data.
+        /// Read, decrypt and process the main code section.
         /// </summary>
         /// <returns></returns>
         private bool Step2()
         {
-            // Obtain the payload address and size..
-            var payloadAddr = this.File.GetFileOffsetFromRva(this.File.GetRvaFromVa(this.StubHeader.PayloadDataVirtualAddress));
-            var payloadData = new byte[this.StubHeader.PayloadDataSize];
-            Array.Copy(this.File.FileData, payloadAddr, payloadData, 0, this.StubHeader.PayloadDataSize);
+            /**
+             * TODO:
+             * 
+             * Should we add custom checks here that mimic the validations of the stub based on the header flags?
+             * 
+             *      0x01 - Hash check validation of the .bind code and stub header.
+             *      0x02 - WinTrustVerify validation of the file.
+             *      
+             * These would just be for warnings to let users know if the file was broken/tampered, but unpacking should
+             * still complete if it can.
+             */
 
-            // Decode the payload data..
-            this.XorKey = SteamStubHelpers.SteamXor(ref payloadData, this.StubHeader.PayloadDataSize, this.XorKey);
-            this.PayloadData = payloadData;
+            // Determine the code section RVA..
+            var codeSectionRVA = this.File.NtHeaders.OptionalHeader.BaseOfCode;
 
-            try
+            // TODO: This is not really ideal to do but for now this breaks support for other variants of this version..
+            if (this.Options.UseExperimentalFeatures)
             {
-                if (this.Options.DumpPayloadToDisk)
-                {
-                    System.IO.File.WriteAllBytes(this.File.FilePath + ".payload", payloadData);
-                    this.Log(" --> Saved payload to disk!", LogMessageType.Debug);
-                }
+                if (this.StubHeader.CodeSectionVirtualAddress != 0)
+                    codeSectionRVA = this.File.GetRvaFromVa(this.StubHeader.CodeSectionVirtualAddress);
             }
-            catch
+
+            // Get the code section..
+            var codeSection = this.File.GetOwnerSection(codeSectionRVA);
+            if (codeSection.PointerToRawData == 0 || codeSection.SizeOfRawData == 0)
+                return false;
+
+            this.CodeSectionIndex = this.File.GetSectionIndex(codeSection);
+
+            // Get the code section data..
+            var codeSectionData = new byte[codeSection.SizeOfRawData];
+            Array.Copy(this.File.FileData, this.File.GetFileOffsetFromRva(codeSection.VirtualAddress), codeSectionData, 0, codeSection.SizeOfRawData);
+
+            // Skip the code section encoding if we do not need to process it..
+            if ((this.StubHeader.Flags & (uint)DrmFlags.UseEncodedCodeSection) == 0)
+                return true;
+
+            // Decode the code section data..
+            var key = this.StubHeader.CodeSectionXorKey;
+            var offset = 0;
+            for (var x = this.StubHeader.CodeSectionSize >> 2; x > 0; --x)
             {
-                // Do nothing here since it doesn't matter if this fails..
+                var val1 = BitConverter.ToUInt32(codeSectionData, offset);
+                var val2 = val1 ^ key;
+                key = val1;
+
+                Array.Copy(BitConverter.GetBytes(val2), 0, codeSectionData, offset, 4);
+
+                offset += 4;
             }
+
+            // Store the section data..
+            this.CodeSectionData = codeSectionData;
 
             return true;
         }
@@ -247,101 +289,10 @@ namespace Steamless.Unpacker.Variant20.x86
         /// <summary>
         /// Step #3
         /// 
-        /// Read, decode and dump the SteamDRMP.dll file.
+        /// Prepare the file sections.
         /// </summary>
         /// <returns></returns>
         private bool Step3()
-        {
-            this.Log(" --> File has SteamDRMP.dll file!", LogMessageType.Debug);
-
-            try
-            {
-                // Obtain the SteamDRMP.dll file address and data..
-                var drmpAddr = this.File.GetFileOffsetFromRva(this.File.GetRvaFromVa(BitConverter.ToUInt32(this.PayloadData, (int)this.StubHeader.SteamDRMPDllVirtualAddress)));
-                var drmpSize = BitConverter.ToUInt32(this.PayloadData, (int)this.StubHeader.SteamDRMPDllSize);
-                var drmpData = new byte[drmpSize];
-                Array.Copy(this.File.FileData, drmpAddr, drmpData, 0, drmpSize);
-
-                // Obtain the XTea encryption keys..
-                var xteyKeys = new uint[(this.PayloadData.Length - this.StubHeader.XTeaKeys) / 4];
-                for (var x = 0; x < (this.PayloadData.Length - this.StubHeader.XTeaKeys) / 4; x++)
-                    xteyKeys[x] = BitConverter.ToUInt32(this.PayloadData, (int)this.StubHeader.XTeaKeys + (x * 4));
-
-                // Decrypt the file data..
-                SteamStubHelpers.SteamDrmpDecryptPass1(ref drmpData, drmpSize, xteyKeys);
-                this.SteamDrmpData = drmpData;
-
-                try
-                {
-                    if (this.Options.DumpSteamDrmpToDisk)
-                    {
-                        var basePath = Path.GetDirectoryName(this.File.FilePath) ?? string.Empty;
-                        System.IO.File.WriteAllBytes(Path.Combine(basePath, "SteamDRMP.dll"), drmpData);
-                        this.Log(" --> Saved SteamDRMP.dll to disk!", LogMessageType.Debug);
-                    }
-                }
-                catch
-                {
-                    // Do nothing here since it doesn't matter if this fails..
-                }
-
-                return true;
-            }
-            catch
-            {
-                this.Log(" --> Error trying to decrypt the files SteamDRMP.dll data!", LogMessageType.Error);
-                return false;
-            }
-        }
-
-        /// <summary>
-        /// Step #4
-        /// 
-        /// Scan, dump and pull needed offsets from within the SteamDRMP.dll file.
-        /// </summary>
-        /// <returns></returns>
-        private bool Step4()
-        {
-            // Scan for the needed data by a known pattern for the block of offset data..
-            var drmpOffset = Pe32Helpers.FindPattern(this.SteamDrmpData, "8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8D ?? ?? ?? ?? ?? 05");
-            if (drmpOffset == 0)
-            {
-                // Fall-back pattern scan for certain files that fail with the above pattern..
-                drmpOffset = Pe32Helpers.FindPattern(this.SteamDrmpData, "8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B");
-                if (drmpOffset == 0)
-                {
-                    // Fall-back pattern (2).. (Seen in some v2 variants.)
-                    drmpOffset = Pe32Helpers.FindPattern(this.SteamDrmpData, "8B ?? ?? ?? ?? ?? 89 ?? ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? A3 ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? A3 ?? ?? ?? ?? 8B ?? ?? ?? ?? ?? A3 ?? ?? ?? ?? 8B");
-                    if (drmpOffset == 0)
-                        return false;
-
-                    // Use fallback offsets if this worked..
-                    this.UseFallbackDrmpOffsets = true;
-                }
-            }
-
-            // Copy the block of data from the SteamDRMP.dll data..
-            var drmpOffsetData = new byte[1024];
-            Array.Copy(this.SteamDrmpData, drmpOffset, drmpOffsetData, 0, 1024);
-
-            // Obtain the offsets from the file data..
-            var drmpOffsets = this.GetSteamDrmpOffsets(drmpOffsetData);
-            if (drmpOffsets.Count != 8)
-                return false;
-
-            // Store the offsets..
-            this.SteamDrmpOffsets = drmpOffsets;
-
-            return true;
-        }
-
-        /// <summary>
-        /// Step #5
-        /// 
-        /// Read, decrypt and process the main code section.
-        /// </summary>
-        /// <returns></returns>
-        private bool Step5()
         {
             // Remove the bind section if its not requested to be saved..
             if (!this.Options.KeepBindSection)
@@ -364,79 +315,35 @@ namespace Steamless.Unpacker.Variant20.x86
             else
                 this.Log(" --> .bind section was kept in the file.", LogMessageType.Debug);
 
-            byte[] codeSectionData;
-
-            // Obtain the main code section (typically .text)..
-            var mainSection = this.File.GetOwnerSection(this.File.GetRvaFromVa(BitConverter.ToUInt32(this.PayloadData.Skip(this.SteamDrmpOffsets[3]).Take(4).ToArray(), 0)));
-            if (this.SteamDrmpOffsets[3] != 0)
+            try
             {
-                if (mainSection.PointerToRawData == 0 || mainSection.SizeOfRawData == 0)
-                    return false;
+                // Rebuild the file sections..
+                this.File.RebuildSections(this.Options.DontRealignSections == false);
+            }
+            catch
+            {
+                return false;
             }
 
-            this.Log($" --> {mainSection.SectionName} linked as main code section.", LogMessageType.Debug);
-
-            // Save the code section index for later use..
-            this.CodeSectionIndex = this.File.GetSectionIndex(mainSection);
-
-            // Determine if we are using encryption on the section..
-            var flags = BitConverter.ToUInt32(this.PayloadData.Skip(this.SteamDrmpOffsets[0]).Take(4).ToArray(), 0);
-            if ((flags & (uint)DrmFlags.NoEncryption) == (uint)DrmFlags.NoEncryption)
-            {
-                this.Log($" --> {mainSection.SectionName} section is not encrypted.", LogMessageType.Debug);
-
-                // No encryption was used, just read the original data..
-                codeSectionData = new byte[mainSection.SizeOfRawData];
-                Array.Copy(this.File.FileData, this.File.GetFileOffsetFromRva(mainSection.VirtualAddress), codeSectionData, 0, mainSection.SizeOfRawData);
-            }
-            else
-            {
-                this.Log($" --> {mainSection.SectionName} section is encrypted.", LogMessageType.Debug);
-
-                try
-                {
-                    // Encryption was used, obtain the encryption information..
-                    var aesKey = this.PayloadData.Skip(this.SteamDrmpOffsets[5]).Take(32).ToArray();
-                    var aesIv = this.PayloadData.Skip(this.SteamDrmpOffsets[6]).Take(16).ToArray();
-                    var codeStolen = this.PayloadData.Skip(this.SteamDrmpOffsets[7]).Take(16).ToArray();
-
-                    // Restore the stolen data then read the rest of the section data..
-                    codeSectionData = new byte[mainSection.SizeOfRawData + codeStolen.Length];
-                    Array.Copy(codeStolen, 0, codeSectionData, 0, codeStolen.Length);
-                    Array.Copy(this.File.FileData, this.File.GetFileOffsetFromRva(mainSection.VirtualAddress), codeSectionData, codeStolen.Length, mainSection.SizeOfRawData);
-
-                    // Decrypt the code section..
-                    var aes = new AesHelper(aesKey, aesIv);
-                    aes.RebuildIv(aesIv);
-                    codeSectionData = aes.Decrypt(codeSectionData, CipherMode.CBC, PaddingMode.None);
-                }
-                catch
-                {
-                    this.Log(" --> Error trying to decrypt the files code section data!", LogMessageType.Error);
-                    return false;
-                }
-            }
-
-            // Store the section data..
-            this.CodeSectionData = codeSectionData;
 
             return true;
         }
 
         /// <summary>
-        /// Step #6
+        /// Step #4
         /// 
         /// Rebuild and save the unpacked file.
         /// </summary>
         /// <returns></returns>
-        private bool Step6()
+        private bool Step4()
         {
             FileStream fStream = null;
 
             try
             {
-                // Rebuild the file sections..
-                this.File.RebuildSections();
+                // Zero the DosStubData if desired..
+                if (this.Options.ZeroDosStubData && this.File.DosStubSize > 0)
+                    this.File.DosStubData = Enumerable.Repeat((byte)0, (int)this.File.DosStubSize).ToArray();
 
                 // Open the unpacked file for writing..
                 var unpackedPath = this.File.FilePath + ".unpacked.exe";
@@ -452,9 +359,9 @@ namespace Steamless.Unpacker.Variant20.x86
                 // Update the NT headers..
                 var ntHeaders = this.File.NtHeaders;
                 var lastSection = this.File.Sections[this.File.Sections.Count - 1];
-                var originalEntry = BitConverter.ToUInt32(this.PayloadData.Skip(this.SteamDrmpOffsets[2]).Take(4).ToArray(), 0);
-                ntHeaders.OptionalHeader.AddressOfEntryPoint = this.File.GetRvaFromVa(originalEntry);
-                ntHeaders.OptionalHeader.SizeOfImage = lastSection.VirtualAddress + lastSection.VirtualSize;
+                ntHeaders.OptionalHeader.AddressOfEntryPoint = this.File.GetRvaFromVa(this.StubHeader.OEP);
+                ntHeaders.OptionalHeader.CheckSum = 0;
+                ntHeaders.OptionalHeader.SizeOfImage = this.File.GetAlignment(lastSection.VirtualAddress + lastSection.VirtualSize, this.File.NtHeaders.OptionalHeader.SectionAlignment);
                 this.File.NtHeaders = ntHeaders;
 
                 // Write the NT headers to the file..
@@ -508,6 +415,26 @@ namespace Steamless.Unpacker.Variant20.x86
         }
 
         /// <summary>
+        /// Step #5
+        /// 
+        /// Recalculate the file checksum.
+        /// </summary>
+        /// <returns></returns>
+        private bool Step5()
+        {
+            var unpackedPath = this.File.FilePath + ".unpacked.exe";
+            if (!Pe32Helpers.UpdateFileChecksum(unpackedPath))
+            {
+                this.Log(" --> Error trying to recalculate unpacked file checksum!", LogMessageType.Error);
+                return false;
+            }
+
+            this.Log(" --> Unpacked file updated with new checksum!", LogMessageType.Success);
+            return true;
+
+        }
+
+        /// <summary>
         /// Disassembles the file to locate the needed DRM header information.
         /// </summary>
         /// <param name="offset"></param>
@@ -553,18 +480,22 @@ namespace Steamless.Unpacker.Variant20.x86
                         return true;
                     }
 
-                    // Looks for: mov dword ptr [value], immediate
-                    if (inst.Mnemonic == ud_mnemonic_code.UD_Imov && inst.Operands[0].Type == ud_type.UD_OP_MEM && inst.Operands[1].Type == ud_type.UD_OP_IMM)
+                    // Looks for: mov reg, immediate
+                    if (inst.Mnemonic == ud_mnemonic_code.UD_Imov && inst.Operands[0].Type == ud_type.UD_OP_REG && inst.Operands[1].Type == ud_type.UD_OP_IMM)
                     {
                         if (structOffset == 0)
-                            structOffset = (uint)(inst.Operands[1].LvalUDWord - this.File.NtHeaders.OptionalHeader.ImageBase);
-                        else
-                            structXorKey = (uint)inst.Operands[1].LvalUDWord;
+                        {
+                            structOffset = inst.Operands[1].LvalUDWord - this.File.NtHeaders.OptionalHeader.ImageBase;
+                            continue;
+                        }
                     }
 
                     // Looks for: mov reg, immediate
                     if (inst.Mnemonic == ud_mnemonic_code.UD_Imov && inst.Operands[0].Type == ud_type.UD_OP_REG && inst.Operands[1].Type == ud_type.UD_OP_IMM)
-                        structSize = (uint)inst.Operands[1].LvalUDWord * 4;
+                    {
+                        structSize = inst.Operands[1].LvalUDWord * 4;
+                        structXorKey = 1;
+                    }
                 }
 
                 offset = size = xorKey = 0;
@@ -581,38 +512,6 @@ namespace Steamless.Unpacker.Variant20.x86
                 if (dataPointer != IntPtr.Zero)
                     Marshal.FreeHGlobal(dataPointer);
             }
-        }
-
-        /// <summary>
-        /// Obtains the needed DRM offsets from the SteamDRMP.dll file.
-        /// </summary>
-        /// <param name="data"></param>
-        /// <returns></returns>
-        private List<int> GetSteamDrmpOffsets(byte[] data)
-        {
-            var offset0 = 2; // Flags
-            var offset1 = 14; // Steam App Id
-            var offset2 = this.UseFallbackDrmpOffsets ? 25 : 26; // OEP
-            var offset3 = this.UseFallbackDrmpOffsets ? 36 : 38; // Code Section Virtual Address
-            var offset4 = this.UseFallbackDrmpOffsets ? 47 : 50; // Code Section Virtual Size (Encrypted Size)
-            var offset5 = this.UseFallbackDrmpOffsets ? 61 : 62; // Code Section AES Key
-            var offset6 = this.UseFallbackDrmpOffsets ? 72 : 67; // Code Section AES Iv
-
-            var offsets = new List<int>
-                {
-                    BitConverter.ToInt32(data, offset0), // ... 0 - Flags
-                    BitConverter.ToInt32(data, offset1), // ... 1 - Steam App Id
-                    BitConverter.ToInt32(data, offset2), // ... 2 - OEP
-                    BitConverter.ToInt32(data, offset3), // ... 3 - Code Section Virtual Address
-                    BitConverter.ToInt32(data, offset4), // ... 4 - Code Section Virtual Size (Encrypted Size)
-                    BitConverter.ToInt32(data, offset5) // .... 5 - Code Section AES Key
-                };
-
-            var aesIvOffset = BitConverter.ToInt32(data, offset6);
-            offsets.Add(aesIvOffset); // ................. 6 - Code Section AES Iv
-            offsets.Add(aesIvOffset + 16); // ............ 7 - Code Section Stolen Bytes
-
-            return offsets;
         }
 
         /// <summary>

@@ -1,5 +1,5 @@
 ﻿/**
- * Steamless - Copyright (c) 2015 - 2018 atom0s [atom0s@live.com]
+ * Steamless - Copyright (c) 2015 - 2024 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -30,9 +30,37 @@ namespace Steamless.Unpacker.Variant20.x86.Classes
     /// </summary>
     public enum DrmFlags
     {
-        NoModuleVerification = 0x02,
-        NoEncryption = 0x04,
-        NoOwnershipCheck = 0x10,
-        NoDebuggerCheck = 0x20,
+        /// <summary>
+        /// None.
+        /// </summary>
+        None = 0x00,
+
+        /// <summary>
+        /// Flag that states that the stub will hash check the stub code and header data.
+        /// </summary>
+        UseValidation = 0x01,
+
+        /// <summary>
+        /// Flag that states that the stub will validate the file via WinVerifyTrust if able.
+        /// </summary>
+        UseWinVerifyTrustValidation = 0x02,
+
+        /// <summary>
+        /// Flag that states that the stub will decode/decrypt the code section.
+        /// </summary>
+        UseEncodedCodeSection = 0x04,
+
+        /// <summary>
+        /// Flag that states that the stub will check for active thread count of the current process during the stubs processing
+        /// to check for any injected threads. (If the count is not 1, the check fails.)
+        /// </summary>
+        UseThreadCheckValidation = 0x08,
+
+        /// <summary>
+        /// Flag that states that the stub will create and check some data against a mapped memory view of the modded startup information.
+        /// 
+        /// This uses the SteamAppID and Unknown0000 of the header.
+        /// </summary>
+        UseMemoryMappedValidation = 0x10
     }
 }

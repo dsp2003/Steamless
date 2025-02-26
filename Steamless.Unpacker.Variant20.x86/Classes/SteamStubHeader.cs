@@ -1,5 +1,5 @@
 ﻿/**
- * Steamless - Copyright (c) 2015 - 2018 atom0s [atom0s@live.com]
+ * Steamless - Copyright (c) 2015 - 2024 atom0s [atom0s@live.com]
  *
  * This work is licensed under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License.
  * To view a copy of this license, visit http://creativecommons.org/licenses/by-nc-nd/4.0/ or send a letter to
@@ -25,66 +25,101 @@
 
 namespace Steamless.Unpacker.Variant20.x86.Classes
 {
+    using System;
     using System.Runtime.InteropServices;
 
     /// <summary>
     /// SteamStub DRM Variant 2.0 Header
+    /// 
+    /// Size: 856 bytes
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct SteamStub32Var20Header
+    public struct SteamStub32Var20_856_Header
     {
-        public uint XorKey; // The base XOR key, if defined, to unpack the file with.
-        public uint GetModuleHandleA_idata; // The address of GetModuleHandleA inside of the .idata section.
-        public uint GetModuleHandleW_idata; // The address of GetModuleHandleW inside of the .idata section.
-        public uint GetProcAddress_idata; // The address of GetProcAddress inside of the .idata section.
-        public uint LoadLibraryA_idata; // The address of LoadLibraryA inside of the .idata section.
-        public uint Unknown0000; // Unknown (Was 0 when testing. Possibly LoadLibraryW.)
+        public uint XorKey1;                   // Xor key used to encode the header data.
+        public uint XorKey2;                   // Xor key used to encode the header data.
+        public uint GetModuleHandleA_idata;    // The address of GetModuleHandleA inside of the .idata section.
+        public uint GetProcAddress_idata;      // The address of GetProcAddress inside of the .idata section.
+        public uint GetModuleHandleW_idata;    // The address of GetModuleHandleW inside of the .idata section.
+        public uint Flags;                     // Protection flags used with the file.
+        public uint Unknown0000;               // Unknown (Used as part of a hash check when (Flags & 0x10) is set.)
         public uint BindSectionVirtualAddress; // The virtual address to the .bind section.
-        public uint BindStartFunctionSize; // The size of the start function from the .bind section.
-        public uint PayloadKeyMatch; // The key inside of the SteamDRMP.dll file that is matched to this structures data. (This matches the first 4 bytes of the payload data.)
-        public uint PayloadDataVirtualAddress; // The virtual address to the payload data.
-        public uint PayloadDataSize; // The size of the payload data.
-        public uint SteamAppID; // The steam application id of the packed file.
-        public uint Unknown0001; // Unknown
+        public uint BindSectionCodeSize;       // The size of the code stub inside of the .bind section.
+        public uint BindSectionHash;           // Hash that is calculated based on the .bind code section and .bind stub header data. (Only used if (Flags & 1) is set.)
+        public uint OEP;                       // The original file OEP to be invoked after the stub has finished.
+        public uint CodeSectionVirtualAddress; // The virtual address to the code section. (.text)
+        public uint CodeSectionSize;           // The size of the code section.
+        public uint CodeSectionXorKey;         // The starting key to xor decode against. (Only used if (Flags & 4) is set.)
+        public uint SteamAppId;                // The steam application id of the packed file.
 
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x08)]
         public byte[] SteamAppIDString; // The SteamAppID of the packed file, in string format.
 
-        public uint SteamDRMPDllVirtualAddress; // The offset inside of the payload data holding the virtual address to the SteamDRMP.dll file data.
-        public uint SteamDRMPDllSize; // The offset inside of the payload data holding the size of the SteamDRMP.dll file data.
-        public uint XTeaKeys; // The offset inside of the payload data holding the address to the Xtea keys to decrypt the SteamDRMP.dll file.
-
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x31C)]
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x314)]
         public byte[] StubData; // Misc stub data, such as strings, error messages, etc.
     }
 
     /// <summary>
-    /// SteamStub DRM Variant 2.0 Header (Header Size: 0xD0 Variant)
+    /// SteamStub DRM Variant 2.0 Header
+    /// 
+    /// Size: 884 bytes
     /// </summary>
     [StructLayout(LayoutKind.Sequential)]
-    public struct SteamStub32Var20Header_D0Variant
+    public struct SteamStub32Var20_884_Header
     {
-        public uint XorKey; // The base XOR key, if defined, to unpack the file with.
-        public uint GetModuleHandleA_idata; // The address of GetModuleHandleA inside of the .idata section.
-        public uint GetModuleHandleW_idata; // The address of GetModuleHandleW inside of the .idata section.
-        public uint GetProcAddress_idata; // The address of GetProcAddress inside of the .idata section.
-        public uint LoadLibraryA_idata; // The address of LoadLibraryA inside of the .idata section.
+        public uint XorKey1;                   // Xor key used to encode the header data.
+        public uint XorKey2;                   // Xor key used to encode the header data.
+        public uint GetModuleHandleA_idata;    // The address of GetModuleHandleA inside of the .idata section.
+        public uint GetProcAddress_idata;      // The address of GetProcAddress inside of the .idata section.
+        public uint LoadLibraryA_idata;        // The address of LoadLibraryA inside of the .idata section.
+        public uint GetProcAddress_custom;     // The address of the custom GetProcAddress implementation function.
+        public uint Flags;                     // Protection flags used with the file.
+        public uint Unknown0000;               // Unknown (Used as part of a hash check when (Flags & 0x10) is set.)
         public uint BindSectionVirtualAddress; // The virtual address to the .bind section.
-        public uint BindStartFunctionSize; // The size of the start function from the .bind section.
-        public uint PayloadKeyMatch; // The key inside of the SteamDRMP.dll file that is matched to this structures data. (This matches the first 4 bytes of the payload data.)
-        public uint PayloadDataVirtualAddress; // The virtual address to the payload data.
-        public uint PayloadDataSize; // The size of the payload data.
-        public uint SteamAppID; // The steam application id of the packed file.
-        public uint Unknown0000; // Unknown
+        public uint BindSectionCodeSize;       // The size of the code stub inside of the .bind section.
+        public uint BindSectionHash;           // Hash that is calculated based on the .bind code section and .bind stub header data. (Only used if (Flags & 1) is set.)
+        public uint OEP;                       // The original file OEP to be invoked after the stub has finished.
+        public uint CodeSectionVirtualAddress; // The virtual address to the code section. (.text)
+        public uint CodeSectionSize;           // The size of the code section.
+        public uint CodeSectionXorKey;         // The starting key to xor decode against. (Only used if (Flags & 4) is set.)
+        public uint SteamAppId;                // The steam application id of the packed file.
 
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x08)]
         public byte[] SteamAppIDString; // The SteamAppID of the packed file, in string format.
 
-        public uint SteamDRMPDllVirtualAddress; // The offset inside of the payload data holding the virtual address to the SteamDRMP.dll file data.
-        public uint SteamDRMPDllSize; // The offset inside of the payload data holding the size of the SteamDRMP.dll file data.
-        public uint XTeaKeys; // The offset inside of the payload data holding the address to the Xtea keys to decrypt the SteamDRMP.dll file.
-
-        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x31C)]
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x32C)]
         public byte[] StubData; // Misc stub data, such as strings, error messages, etc.
+    }
+
+    /// <summary>
+    /// SteamStub DRM Variant 2.0 Header
+    /// 
+    /// Size: 952 bytes
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SteamStub32Var20_952_Header
+    {
+        public uint XorKey1;                    // Xor key used to encode the header data.
+        public uint XorKey2;                    // Xor key used to encode the header data.
+        public uint GetModuleHandleA_idata;     // The address of GetModuleHandleA inside of the .idata section.
+        public uint GetProcAddress_idata;       // The address of GetProcAddress inside of the .idata section.
+        public uint GetModuleHandleW_idata;     // The address of GetModuleHandleW inside of the .idata section.
+        public uint GetProcAddress_bind;        // The address of the .bind sections custom GetProcAddress instance.
+        public uint Flags;                      // Protection flags used with the file.
+        public uint Unknown0000;                // Unknown (Used as part of a hash check when (Flags & 0x10) is set.)
+        public uint BindSectionVirtualAddress;  // The virtual address to the .bind section.
+        public uint BindSectionCodeSize;        // The size of the code stub inside of the .bind section.
+        public uint BindSectionHash;            // Hash that is calculated based on the .bind code section and .bind stub header data. (Only used if (Flags & 1) is set.)
+        public uint OEP;                        // The original file OEP to be invoked after the stub has finished.
+        public uint CodeSectionVirtualAddress;  // The virtual address to the code section. (.text) (Was 0x0401000 when testing. Possibly original OEP?)
+        public uint CodeSectionSize;            // The size of the code section.
+        public uint CodeSectionXorKey;          // The starting key to xor decode against. (Only used if (Flags & 4) is set.)
+        public uint SteamAppID;                 // The steam application id of the packed file.
+
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x0C)]
+        public byte[] SteamAppIDString;         // The SteamAppID of the packed file, in string format.
+
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 0x36C)]
+        public byte[] StubData;                 // Misc stub data, such as strings, error messages, etc.
     }
 }
